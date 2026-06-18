@@ -41,6 +41,7 @@
     "prepack": "turbo run build"
   },
   "dependencies": {
+    "@cloudinary/url-gen": "^1.22.0",
     "@sanity/icons": "^3.7.4",
     "@sanity/studio-secrets": "workspace:^",
     "@sanity/ui": "catalog:",
