@@ -494,7 +494,13 @@ Open that URL in the browser to authenticate and land directly in the Kitchen Si
 
 ### Node.js version notes
 
-`dev/test-studio` declares `engines.node: "24"`; the monorepo otherwise targets latest LTS. Node 22 works for build/lint/test with engine warnings. Node 24 is preferred when available.
+`dev/test-studio` declares `engines.node: "24"`; the monorepo otherwise targets latest LTS. Node 24 is preferred when available. Lint runs on any Node 22.
+
+A full `pnpm build` (and `pnpm test`, via its `pretest` build) needs **Node ≥ 22.18**. The `@repo/generators` build runs `tsdown`, which loads a TypeScript config (`turbo/generators/tsdown.config.mts`) and requires either native TS config loading (Node ≥ 22.18) or the optional `unrun`/`tsx` loader. On older Node (e.g. the cloud VM's default `/exec-daemon/node`, which may be 22.14) the build fails with `Failed to import module "unrun"`. Switch to a newer Node — the preinstalled 22.22.2 via `nvm` works:
+
+```bash
+export PATH="$HOME/.nvm/versions/node/v22.22.2/bin:$PATH"; hash -r
+```
 
 ### Lint / build / test
 
