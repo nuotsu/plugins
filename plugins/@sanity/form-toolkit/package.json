@@ -75,11 +75,13 @@
     "@repo/package.config": "workspace:*",
     "@repo/tsconfig": "workspace:*",
     "@sanity/pkg-utils": "catalog:",
+    "@testing-library/react": "^16.3.2",
     "@types/mailchimp__mailchimp_marketing": "^3.0.22",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "babel-plugin-react-compiler": "catalog:",
+    "jsdom": "^29.0.1",
     "react": "catalog:",
     "react-dom": "catalog:",
     "sanity": "catalog:"
