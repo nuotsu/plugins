@@ -28,7 +28,7 @@ export const openMediaSelector = (
   insertHandler: (params: InsertHandlerParams) => void,
   selectedAsset?: CloudinaryAsset,
 ) => {
-  loadJS(widgetSrc, () => {
+  loadJS(widgetSrc, (cloudinary) => {
     const options: Record<string, any> = {
       cloud_name: cloudName,
       api_key: apiKey,
@@ -44,7 +44,7 @@ export const openMediaSelector = (
       }
     }
 
-    window.cloudinary.openMediaLibrary(options, {insertHandler})
+    cloudinary.openMediaLibrary(options, {insertHandler})
   })
 }
 
@@ -61,7 +61,7 @@ export const createMediaLibrary = ({
   libraryCreated: (library: CloudinaryMediaLibrary) => void
   insertHandler: (params: InsertHandlerParams) => void
 }) => {
-  loadJS(widgetSrc, () => {
+  loadJS(widgetSrc, (cloudinary) => {
     const options: Record<string, any> = {
       cloud_name: cloudName,
       api_key: apiKey,
@@ -70,25 +70,38 @@ export const createMediaLibrary = ({
       remove_header: true,
     }
 
-    libraryCreated(window.cloudinary.createMediaLibrary(options, {insertHandler}))
+    libraryCreated(cloudinary.createMediaLibrary(options, {insertHandler}))
   })
 }
 
-function loadJS(url: string, callback: () => void) {
+function loadJS(url: string, callback: (cloudinary: NonNullable<Window['cloudinary']>) => void) {
+  // The widget exposes `window.cloudinary` only once the script has finished
+  // loading. When it's already available, run the callback right away.
+  if (window.cloudinary) {
+    callback(window.cloudinary)
+    return
+  }
+
+  const handleLoad = () => {
+    if (window.cloudinary) {
+      callback(window.cloudinary)
+    }
+  }
+
   const existingScript = document.getElementById('damWidget')
-  if (!existingScript) {
-    const script = document.createElement('script')
-    script.src = url
-    script.id = 'damWidget'
-    document.body.appendChild(script)
-    script.addEventListener('load', () => {
-      callback()
-    })
+  if (existingScript) {
+    // Another input already injected the script, but it hasn't finished
+    // loading yet (the global isn't ready). Wait for the load event instead
+    // of invoking the callback too early.
+    existingScript.addEventListener('load', handleLoad, {once: true})
+    return
   }
-  if (existingScript && callback) {
-    return callback()
-  }
-  return true
+
+  const script = document.createElement('script')
+  script.src = url
+  script.id = 'damWidget'
+  script.addEventListener('load', handleLoad, {once: true})
+  document.body.appendChild(script)
 }
 
 export function encodeSourceId(asset: CloudinaryAssetResponse): string {

@@ -56,7 +56,7 @@ export const cloudinaryImageSource: AssetSource = {
 }
 
 export const cloudinaryAssetSourcePlugin = definePlugin({
-  name: 'cloudinart-asset-source',
+  name: 'cloudinary-asset-source',
   form: {
     image: {
       assetSources: [cloudinaryImageSource],
