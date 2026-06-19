@@ -1,4 +1,4 @@
-import {PureComponent, type MutableRefObject} from 'react'
+import {type MutableRefObject, useEffect, useRef} from 'react'
 
 import type {LatLng} from '../types'
 import {latLngAreEqual} from './util'
@@ -19,112 +19,140 @@ interface Props {
   color?: {background: string; border: string; text: string}
 }
 
-export class Marker extends PureComponent<Props> {
-  marker: google.maps.Marker | undefined
+function createMarkerIcon(
+  api: typeof window.google.maps,
+  color?: {background: string; border: string; text: string},
+): google.maps.Symbol | undefined {
+  if (!color) {
+    return undefined
+  }
 
-  eventHandlers: {
-    move?: google.maps.MapsEventListener
-    click?: google.maps.MapsEventListener
-  } = {}
+  return {
+    path: markerPath,
+    fillOpacity: 1,
+    fillColor: color.background,
+    strokeColor: color.border,
+    strokeWeight: 2,
+    anchor: new api.Point(10, 35),
+    labelOrigin: new api.Point(10, 11),
+  }
+}
 
-  override componentDidMount() {
-    const {position, api, map, onMove, zIndex, opacity, label, markerRef, color} = this.props
+export function Marker({
+  position,
+  api,
+  map,
+  onMove,
+  onClick,
+  zIndex,
+  opacity,
+  label,
+  markerRef,
+  color,
+}: Props) {
+  const markerInstanceRef = useRef<google.maps.Marker | undefined>(undefined)
+  const moveHandlerRef = useRef<google.maps.MapsEventListener | undefined>(undefined)
+  const clickHandlerRef = useRef<google.maps.MapsEventListener | undefined>(undefined)
+  const prevPositionRef = useRef(position)
+  const prevMapRef = useRef(map)
+
+  useEffect(() => {
     const {Marker: GMarker} = api
 
-    let icon: google.maps.Symbol | undefined
-    if (color) {
-      icon = {
-        path: markerPath,
-        fillOpacity: 1,
-        fillColor: color.background,
-        strokeColor: color.border,
-        strokeWeight: 2,
-        anchor: new api.Point(10, 35),
-        labelOrigin: new api.Point(10, 11),
-      }
-    }
-
-    this.marker = new GMarker({
+    const marker = new GMarker({
       draggable: Boolean(onMove),
       position,
       map,
       zIndex,
       opacity,
       label,
-      icon,
+      icon: createMarkerIcon(api, color),
     })
 
+    markerInstanceRef.current = marker
+    prevPositionRef.current = position
+    prevMapRef.current = map
+
     if (markerRef) {
-      markerRef.current = this.marker
+      markerRef.current = marker
     }
 
-    this.attachMoveHandler()
-    this.attachClickHandler()
-  }
+    return () => {
+      if (moveHandlerRef.current) {
+        moveHandlerRef.current.remove()
+        moveHandlerRef.current = undefined
+      }
 
-  override componentDidUpdate(prevProps: Props) {
-    if (!this.marker) {
+      if (clickHandlerRef.current) {
+        clickHandlerRef.current.remove()
+        clickHandlerRef.current = undefined
+      }
+
+      marker.setMap(null)
+      markerInstanceRef.current = undefined
+
+      if (markerRef?.current === marker) {
+        markerRef.current = undefined
+      }
+    }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- marker props are updated in separate effects
+  }, [api, color, map, markerRef, zIndex])
+
+  useEffect(() => {
+    const marker = markerInstanceRef.current
+    if (!marker) {
       return
     }
 
-    const {position, onMove, label, zIndex, opacity, map} = this.props
-
-    if (prevProps.onMove !== onMove) {
-      this.attachMoveHandler()
+    if (moveHandlerRef.current) {
+      moveHandlerRef.current.remove()
+      moveHandlerRef.current = undefined
     }
 
-    if (!latLngAreEqual(prevProps.position, position)) {
-      this.marker.setPosition(position)
+    marker.setDraggable(Boolean(onMove))
+
+    if (onMove) {
+      moveHandlerRef.current = api.event.addListener(marker, 'dragend', onMove)
+    }
+  }, [api, onMove])
+
+  useEffect(() => {
+    const marker = markerInstanceRef.current
+    if (!marker) {
+      return
     }
 
-    if (prevProps.label !== label) {
-      this.marker.setLabel(label || null)
+    if (clickHandlerRef.current) {
+      clickHandlerRef.current.remove()
+      clickHandlerRef.current = undefined
     }
 
-    if (prevProps.zIndex !== zIndex) {
-      this.marker.setZIndex(zIndex || null)
+    if (onClick) {
+      clickHandlerRef.current = api.event.addListener(marker, 'click', onClick)
+    }
+  }, [api, onClick])
+
+  useEffect(() => {
+    const marker = markerInstanceRef.current
+    if (!marker) {
+      return
     }
 
-    if (prevProps.opacity !== opacity) {
-      this.marker.setOpacity(opacity || null)
+    if (!latLngAreEqual(prevPositionRef.current, position)) {
+      marker.setPosition(position)
+      prevPositionRef.current = position
     }
 
-    if (prevProps.map !== map) {
-      this.marker.setMap(map)
-    }
-  }
+    marker.setLabel(label || null)
+    marker.setZIndex(zIndex ?? null)
+    marker.setOpacity(opacity ?? null)
+    marker.setIcon(createMarkerIcon(api, color))
 
-  override componentWillUnmount() {
-    if (this.eventHandlers.move) {
-      this.eventHandlers.move.remove()
+    if (prevMapRef.current !== map) {
+      marker.setMap(map)
+      prevMapRef.current = map
     }
+  }, [api, color, label, map, opacity, position, zIndex])
 
-    if (this.marker) {
-      this.marker.setMap(null)
-    }
-  }
-
-  attachMoveHandler() {
-    const {api, onMove} = this.props
-    if (this.eventHandlers.move) {
-      this.eventHandlers.move.remove()
-    }
-    if (this.marker && onMove) {
-      this.eventHandlers.move = api.event.addListener(this.marker, 'dragend', onMove)
-    }
-  }
-
-  attachClickHandler() {
-    const {api, onClick} = this.props
-    if (this.eventHandlers.click) {
-      this.eventHandlers.click.remove()
-    }
-    if (this.marker && onClick) {
-      this.eventHandlers.click = api.event.addListener(this.marker, 'click', onClick)
-    }
-  }
-
-  override render(): null {
-    return null
-  }
+  return null
 }

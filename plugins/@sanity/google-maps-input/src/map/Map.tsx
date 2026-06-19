@@ -1,8 +1,7 @@
-import {createRef, PureComponent, type ReactElement} from 'react'
+import {useCallback, useEffect, useRef, useState, type ReactElement} from 'react'
 
 import type {LatLng} from '../types'
 import {MapContainer} from './Map.styles'
-import {latLngAreEqual} from './util'
 
 interface MapProps {
   api: typeof window.google.maps
@@ -16,111 +15,108 @@ interface MapProps {
   children?: (map: google.maps.Map) => ReactElement
 }
 
-interface MapState {
-  map: google.maps.Map | undefined
-}
+export function GoogleMap({
+  api,
+  location,
+  bounds,
+  defaultZoom = 8,
+  mapTypeControl,
+  scrollWheel = true,
+  controlSize,
+  onClick,
+  children,
+}: MapProps) {
+  const [map, setMap] = useState<google.maps.Map | undefined>(undefined)
+  const clickHandlerRef = useRef<google.maps.MapsEventListener | undefined>(undefined)
+  const mapElRef = useRef<HTMLDivElement | null>(null)
 
-export class GoogleMap extends PureComponent<MapProps, MapState> {
-  static defaultProps = {
-    defaultZoom: 8,
-    scrollWheel: true,
-  }
-
-  override state: MapState = {map: undefined}
-  clickHandler: google.maps.MapsEventListener | undefined
-  mapRef = createRef<HTMLDivElement>()
-  mapEl: HTMLDivElement | null = null
-
-  override componentDidMount() {
-    this.attachClickHandler()
-  }
-
-  attachClickHandler = () => {
-    const map = this.state.map
-    if (!map) {
-      return
-    }
-
-    const {api, onClick} = this.props
-    const {event} = api
-
-    if (this.clickHandler) {
-      this.clickHandler.remove()
-    }
-
-    if (onClick) {
-      this.clickHandler = event.addListener(map, 'click', onClick)
-    }
-  }
-
-  override componentDidUpdate(prevProps: MapProps) {
-    const map = this.state.map
-    if (!map) {
-      return
-    }
-
-    const {onClick, location, bounds} = this.props
-
-    if (prevProps.onClick !== onClick) {
-      this.attachClickHandler()
-    }
-
-    if (!latLngAreEqual(prevProps.location, location)) {
-      map.panTo(this.getCenter())
-    }
-
-    if (bounds && (!prevProps.bounds || !bounds.equals(prevProps.bounds))) {
-      map.fitBounds(bounds)
-    }
-  }
-
-  override componentWillUnmount() {
-    if (this.clickHandler) {
-      this.clickHandler.remove()
-    }
-  }
-
-  getCenter(): google.maps.LatLng {
-    const {location, api} = this.props
+  const getCenter = useCallback((): google.maps.LatLng => {
     return new api.LatLng(location.lat, location.lng)
-  }
+  }, [api, location.lat, location.lng])
 
-  constructMap(el: HTMLDivElement) {
-    const {defaultZoom, api, mapTypeControl, controlSize, bounds, scrollWheel} = this.props
+  const attachClickHandler = useCallback(
+    (mapInstance: google.maps.Map) => {
+      if (clickHandlerRef.current) {
+        clickHandlerRef.current.remove()
+        clickHandlerRef.current = undefined
+      }
 
-    const map = new api.Map(el, {
-      zoom: defaultZoom,
-      center: this.getCenter(),
-      scrollwheel: scrollWheel,
-      streetViewControl: false,
-      mapTypeControl,
+      if (onClick) {
+        clickHandlerRef.current = api.event.addListener(mapInstance, 'click', onClick)
+      }
+    },
+    [api, onClick],
+  )
+
+  const setMapElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (element && element !== mapElRef.current) {
+        const mapInstance = new api.Map(element, {
+          zoom: defaultZoom,
+          center: getCenter(),
+          scrollwheel: scrollWheel,
+          streetViewControl: false,
+          mapTypeControl,
+          controlSize,
+        })
+
+        if (bounds) {
+          mapInstance.fitBounds(bounds)
+        }
+
+        mapElRef.current = element
+        setMap(mapInstance)
+        attachClickHandler(mapInstance)
+      } else {
+        mapElRef.current = element
+      }
+    },
+    [
+      api,
+      attachClickHandler,
+      bounds,
       controlSize,
-    })
+      defaultZoom,
+      getCenter,
+      mapTypeControl,
+      scrollWheel,
+    ],
+  )
 
-    if (bounds) {
-      map.fitBounds(bounds)
+  useEffect(() => {
+    if (map) {
+      attachClickHandler(map)
+    }
+  }, [attachClickHandler, map])
+
+  useEffect(() => {
+    if (!map) {
+      return
     }
 
-    return map
-  }
+    map.panTo(getCenter())
+  }, [getCenter, map])
 
-  setMapElement = (element: HTMLDivElement | null) => {
-    if (element && element !== this.mapEl) {
-      const map = this.constructMap(element)
-      this.setState({map}, this.attachClickHandler)
+  useEffect(() => {
+    if (!map || !bounds) {
+      return
     }
 
-    this.mapEl = element
-  }
+    map.fitBounds(bounds)
+  }, [bounds, map])
 
-  override render() {
-    const {children} = this.props
-    const {map} = this.state
-    return (
-      <>
-        <MapContainer ref={this.setMapElement} />
-        {children && map ? children(map) : null}
-      </>
-    )
-  }
+  useEffect(() => {
+    return () => {
+      if (clickHandlerRef.current) {
+        clickHandlerRef.current.remove()
+      }
+    }
+  }, [])
+
+  return (
+    <>
+      <MapContainer ref={setMapElement} />
+      {children && map ? children(map) : null}
+    </>
+  )
 }

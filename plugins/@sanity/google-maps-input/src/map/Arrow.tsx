@@ -1,4 +1,4 @@
-import {type MutableRefObject, PureComponent} from 'react'
+import {type MutableRefObject, useEffect, useRef} from 'react'
 
 import type {LatLng} from '../types'
 import {latLngAreEqual} from './util'
@@ -14,20 +14,19 @@ interface Props {
   onClick?: (event: google.maps.MapMouseEvent) => void
 }
 
-export class Arrow extends PureComponent<Props> {
-  line: google.maps.Polyline | undefined
+export function Arrow({from, to, api, map, zIndex, onClick, color, arrowRef}: Props) {
+  const lineRef = useRef<google.maps.Polyline | undefined>(undefined)
+  const clickHandlerRef = useRef<google.maps.MapsEventListener | undefined>(undefined)
+  const prevFromRef = useRef(from)
+  const prevToRef = useRef(to)
+  const prevMapRef = useRef(map)
 
-  eventHandlers: {
-    click?: google.maps.MapsEventListener
-  } = {}
-
-  override componentDidMount() {
-    const {from, to, api, map, zIndex, onClick, color, arrowRef} = this.props
+  useEffect(() => {
     const lineSymbol = {
       path: api.SymbolPath.FORWARD_OPEN_ARROW,
     }
 
-    this.line = new api.Polyline({
+    const line = new api.Polyline({
       map,
       zIndex,
       path: [from, to],
@@ -36,41 +35,67 @@ export class Arrow extends PureComponent<Props> {
       strokeColor: color ? color.text : 'black',
     })
 
-    if (onClick) {
-      this.eventHandlers.click = api.event.addListener(this.line, 'click', onClick)
-    }
+    lineRef.current = line
 
     if (arrowRef) {
-      arrowRef.current = this.line
+      arrowRef.current = line
     }
-  }
 
-  override componentDidUpdate(prevProps: Props) {
-    if (!this.line) {
+    return () => {
+      if (clickHandlerRef.current) {
+        clickHandlerRef.current.remove()
+        clickHandlerRef.current = undefined
+      }
+
+      line.setMap(null)
+      lineRef.current = undefined
+
+      if (arrowRef?.current === line) {
+        arrowRef.current = undefined
+      }
+    }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- path updates are handled in a separate effect
+  }, [api, arrowRef, color, map, zIndex])
+
+  useEffect(() => {
+    const line = lineRef.current
+    if (!line) {
       return
     }
 
-    const {from, to, map} = this.props
-    if (!latLngAreEqual(prevProps.from, from) || !latLngAreEqual(prevProps.to, to)) {
-      this.line.setPath([from, to])
+    if (!latLngAreEqual(prevFromRef.current, from) || !latLngAreEqual(prevToRef.current, to)) {
+      line.setPath([from, to])
+      prevFromRef.current = from
+      prevToRef.current = to
     }
 
-    if (prevProps.map !== map) {
-      this.line.setMap(map)
+    if (prevMapRef.current !== map) {
+      line.setMap(map)
+      prevMapRef.current = map
     }
-  }
+  }, [from, map, to])
 
-  override componentWillUnmount() {
-    if (this.line) {
-      this.line.setMap(null)
+  useEffect(() => {
+    const line = lineRef.current
+
+    if (line) {
+      if (clickHandlerRef.current) {
+        clickHandlerRef.current.remove()
+        clickHandlerRef.current = undefined
+      }
+
+      if (onClick) {
+        clickHandlerRef.current = api.event.addListener(line, 'click', onClick)
+      }
     }
 
-    if (this.eventHandlers.click) {
-      this.eventHandlers.click.remove()
+    return () => {
+      if (clickHandlerRef.current) {
+        clickHandlerRef.current.remove()
+        clickHandlerRef.current = undefined
+      }
     }
-  }
+  }, [api, onClick])
 
-  override render(): null {
-    return null
-  }
+  return null
 }

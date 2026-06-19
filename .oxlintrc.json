@@ -47,6 +47,11 @@
             "name": "react",
             "importNames": ["createElement"],
             "message": "Please use JSX instead of createElement, for example `createElement(Icon)` should be `<Icon />`"
+          },
+          {
+            "name": "react",
+            "importNames": ["Component", "PureComponent"],
+            "message": "Class components are not allowed. Use function components instead."
           }
         ],
         "patterns": [
