@@ -12,7 +12,7 @@ test('package exports', {timeout: 30_000}, async () => {
   expect(manifest.exports).toMatchInlineSnapshot(`
     {
       ".": {
-        "OrderableDocumentList": "function",
+        "OrderableDocumentList": "object",
         "orderRankField": "function",
         "orderRankOrdering": "object",
         "orderableDocumentListDeskItem": "function",
