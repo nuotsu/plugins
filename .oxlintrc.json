@@ -52,6 +52,11 @@
             "name": "react",
             "importNames": ["Component", "PureComponent"],
             "message": "Class components are not allowed. Use function components instead."
+          },
+          {
+            "name": "react",
+            "importNames": ["createRef"],
+            "message": "createRef is only for class components. Use the useRef hook instead."
           }
         ],
         "patterns": [
