@@ -1,61 +1,42 @@
-import {TextInput} from '@sanity/ui'
-import {useEffect, useRef} from 'react'
+import {useMap, useMapsLibrary} from '@vis.gl/react-google-maps'
 
-import {WrapperContainer} from './SearchInput.styles'
+import type {LatLng} from '../types'
+import {SearchInputContainer} from './SearchInput.styles'
 
 interface Props {
-  api: typeof window.google.maps
-  map: google.maps.Map
-  onChange: (result: google.maps.places.PlaceResult) => void
+  onSelect: (location: LatLng) => void
 }
 
-export function SearchInput({api, map, onChange}: Props) {
-  const searchInputRef = useRef<HTMLInputElement>(null)
-  const autoCompleteRef = useRef<google.maps.places.Autocomplete | undefined>(undefined)
+/**
+ * Place search using the `<gmp-place-autocomplete>` web component (Places API
+ * New). The element is provided by the `places` library, so we wait for it to
+ * load before rendering, then listen for the `gmp-select` event.
+ */
+export function SearchInput({onSelect}: Props) {
+  const places = useMapsLibrary('places')
+  const map = useMap()
 
-  useEffect(() => {
-    const input = searchInputRef.current
-    if (!input) {
-      return () => {}
-    }
-
-    const handleChange = () => {
-      const autoComplete = autoCompleteRef.current
-      if (!autoComplete) {
-        return
-      }
-
-      onChange(autoComplete.getPlace())
-
-      if (searchInputRef.current) {
-        searchInputRef.current.value = ''
-      }
-    }
-
-    const {Circle, places, event} = api
-    const searchBounds = new Circle({center: map.getCenter(), radius: 100}).getBounds()!
-    const autoComplete = new places.Autocomplete(input, {
-      bounds: searchBounds,
-      types: [],
-    })
-
-    autoCompleteRef.current = autoComplete
-    const listener = event.addListener(autoComplete, 'place_changed', handleChange)
-
-    return () => {
-      listener.remove()
-      autoCompleteRef.current = undefined
-    }
-  }, [api, map, onChange])
+  if (!places) {
+    return null
+  }
 
   return (
-    <WrapperContainer>
-      <TextInput
-        name="place"
-        ref={searchInputRef}
-        placeholder="Search for place or address"
-        padding={4}
+    <SearchInputContainer>
+      <gmp-place-autocomplete
+        ongmp-select={async ({placePrediction}: google.maps.places.PlacePredictionSelectEvent) => {
+          const place = placePrediction.toPlace()
+          await place.fetchFields({fields: ['location']})
+
+          const location = place.location
+          if (!location) {
+            return
+          }
+
+          const latLng = {lat: location.lat(), lng: location.lng()}
+          onSelect(latLng)
+          map?.panTo(latLng)
+        }}
       />
-    </WrapperContainer>
+    </SearchInputContainer>
   )
 }
